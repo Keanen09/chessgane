@@ -1,0 +1,102 @@
+import pygame
+import chess
+import chess.engine
+import os
+import time
+
+# Constants
+WIDTH, HEIGHT = 900, 800
+SQUARE_SIZE = WIDTH // 8
+BOARD_COLOR_1 = (240, 217, 181)  # Light square color
+BOARD_COLOR_2 = (181, 136, 99)   # Dark square color
+HIGHLIGHT_COLOR = (0, 255, 0, 128)  # Green highlight for legal moves
+PIECE_IMAGES = {}
+ASSET_PATH = "assets/"
+STOCKFISH_PATH = "./stockfish"  # Update with your Stockfish binary path
+
+# Load piece images
+def load_pieces():
+    pieces = ["K", "Q", "R", "B", "N", "P"]
+    colors = ["w", "b"]
+    for color in colors:
+        for piece in pieces:
+            PIECE_IMAGES[f"{color}{piece}"] = pygame.image.load(os.path.join(ASSET_PATH, f"{color}{piece}.png"))
+
+# Draw the chessboard
+def draw_board(screen):
+    for row in range(8):
+        for col in range(8):
+            color = BOARD_COLOR_1 if (row + col) % 2 == 0 else BOARD_COLOR_2
+            pygame.draw.rect(screen, color, (col * SQUARE_SIZE, row * SQUARE_SIZE, SQUARE_SIZE, SQUARE_SIZE))
+
+# Draw pieces on the board
+def draw_pieces(screen, board):
+    for square, piece in board.piece_map().items():
+        row, col = divmod(square, 8)
+        image = PIECE_IMAGES[str(piece)]
+        screen.blit(image, (col * SQUARE_SIZE, row * SQUARE_SIZE))
+
+# Highlight legal moves
+def highlight_moves(screen, board, selected_square):
+    if selected_square is not None:
+        legal_moves = [move.to_square for move in board.legal_moves if move.from_square == selected_square]
+        for square in legal_moves:
+            row, col = divmod(square, 8)
+            pygame.draw.rect(screen, HIGHLIGHT_COLOR, (col * SQUARE_SIZE, row * SQUARE_SIZE, SQUARE_SIZE, SQUARE_SIZE))
+
+# AI move using Stockfish
+def ai_move(board):
+    with chess.engine.SimpleEngine.popen_uci(STOCKFISH_PATH) as engine:
+        result = engine.play(board, chess.engine.Limit(time=1.0))
+        board.push(result.move)
+
+# Main game loop
+def main():
+    pygame.init()
+    screen = pygame.display.set_mode((WIDTH, HEIGHT))
+    pygame.display.set_caption("Chess with Stockfish AI")
+    clock = pygame.time.Clock()
+
+    load_pieces()
+
+    board = chess.Board()
+    selected_square = None
+    running = True
+    player_turn = True  # True for human, False for AI
+
+    while running:
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                running = False
+            elif event.type == pygame.MOUSEBUTTONDOWN and player_turn:
+                x, y = event.pos
+                row, col = y // SQUARE_SIZE, x // SQUARE_SIZE
+                square = chess.square(col, row)
+                if selected_square is None:
+                    selected_square = square
+                else:
+                    move = chess.Move(selected_square, square)
+                    if move in board.legal_moves:
+                        board.push(move)
+                        selected_square = None
+                        player_turn = False  # AI's turn
+                    else:
+                        selected_square = None
+
+        # AI's turn
+        if not player_turn and not board.is_game_over():
+            ai_move(board)
+            player_turn = True
+
+        # Draw the game
+        screen.fill((0, 0, 0))
+        draw_board(screen)
+        highlight_moves(screen, board, selected_square)
+        draw_pieces(screen, board)
+        pygame.display.flip()
+        clock.tick(60)
+
+    pygame.quit()
+
+if __name__ == "__main__":
+    main()
